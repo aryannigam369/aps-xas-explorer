@@ -1,0 +1,9 @@
+node_modules/
+.data-app-offline/
+.DS_Store
+*.log
+
+dist/
+__pycache__/
+*.pyc
+.pnpm-store/

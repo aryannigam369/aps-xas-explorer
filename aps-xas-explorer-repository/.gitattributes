@@ -1,0 +1,8 @@
+# Compiled deployment files are generated; editable source stays countable.
+docs/index.html linguist-generated=true
+docs/data-app-build.json linguist-generated=true
+docs/snapshot.*.json linguist-generated=true
+docs/raw/** linguist-vendored=true
+public/raw/** linguist-vendored=true
+src/data.json linguist-generated=true
+*.zip binary
