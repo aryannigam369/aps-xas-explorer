@@ -1,0 +1,592 @@
+#specfe_created: B60910D862D06F7520637BB1383C4D41
+cdef("end_mac", '{
+   cdef("","","specfe","delete")
+   cdef("user_setpos", "# \\$\\*", "specfe")
+   unix("mv /home/bessrc/data/2014/2014-2/NCSU/spec.mac /home/bessrc/data/2014/2014-2/NCSU/spec.mac.bak")
+}', "specfe")
+
+cdef("specfe_tweak", '{
+   double array twA[MOTORS]
+   double array twS[COUNTERS]
+   ctim=0.1
+   while (1) {
+      if(!wait(0x22)){
+         get_counts
+         count_em ctim
+      }
+      if(input(-1)!=""){
+         local nmot, npos
+         aline=input()
+         if(sscanf(aline,"mvr %s %g", nmot, npos)==2) {
+            waitmove;get_angles;A[motor_num(nmot)]+=(npos)
+            move_em
+         } else if(sscanf(aline,"mv %s %g", nmot, npos)==2) {
+            waitmove;get_angles;A[motor_num(nmot)]=(npos)
+            move_em
+         } else if(sscanf(aline,"ct %g", ctim)==1) {
+         } else if(aline=="") {
+            break
+         }
+      }
+      get_angles
+      sleep(0.1)
+   }
+}', "specfe")
+
+cdef("specfe_init_shm", '{
+   local i
+   shared double array specfe_motors[2][1024]
+   shared double array specfe_counters[2][1024]
+   get_angles
+   for(i=0; i<MOTORS; i++) {
+      specfe_motors[0][i]=A[i]
+      specfe_motors[1][i]=is_using_motor(i)
+      sock_put("localhost:40477",sprintf("#CM%d %g %d\n",i,A[i],is_using_motor(i)))
+   }
+   for(i=0; i<COUNTERS; i++) {
+      specfe_counters[0][i]=S[i]
+      specfe_counters[1][i]=is_using_counter(i)
+      sock_put("localhost:40477",sprintf("#CC%d %g %d\n",i,S[i],is_using_counter(i)))
+   }
+
+   sock_put("localhost:40477",sprintf("#CA %d %d
+", eval("return SHMID_specfe_motors"), eval("return SHMID_specfe_counters")))
+}', "specfe")
+
+cdef("user_getcounts", '{
+   local i,v,u
+   for(i=0; i<COUNTERS; i++) {
+      v=S[i];u=is_using_counter(i)
+      if((specfe_counters[0][i]!=v)||(specfe_counters[1][i]!=u)) {
+         specfe_counters[0][i]=v
+         specfe_counters[1][i]=u
+         sock_put("localhost:40477",sprintf("#CC%d %g %d\n",i,v,u))
+      }
+   }
+}', "specfe", 0x20)
+
+cdef("user_postmove", '{
+   read_motors(0)
+   local i,v,u
+   for(i=0; i<MOTORS; i++) {
+      v=A[i];u=is_using_motor(i)
+      if((specfe_motors[0][i]!=v)||(specfe_motors[1][i]!=u)) {
+         specfe_motors[0][i]=v
+         specfe_motors[1][i]=u
+         sock_put("localhost:40477",sprintf("#CM%d %g %d\n",i,v,u))
+      }
+   }
+}', "specfe", 0x20)
+cdef("user_getangles", '{
+   local i,v,u
+   for(i=0; i<MOTORS; i++) {
+      v=A[i];u=is_using_motor(i)
+      if((specfe_motors[0][i]!=v)||(specfe_motors[1][i]!=u)) {
+         specfe_motors[0][i]=v
+         specfe_motors[1][i]=u
+         sock_put("localhost:40477",sprintf("#CM%d %g %d\n",i,v,u))
+      }
+   }
+}', "specfe", 0x20)
+cdef("user_setpos", '{
+ # $*
+   local i,v,u
+   get_angles
+   for(i=0; i<MOTORS; i++) {
+      v=A[i];u=is_using_motor(i)
+      if((specfe_motors[0][i]!=v)||(specfe_motors[1][i]!=u)) {
+         specfe_motors[0][i]=v
+         specfe_motors[1][i]=u
+         sock_put("localhost:40477",sprintf("#CM%d %g %d\n",i,v,u))
+      }
+   }
+}', "specfe", 0x20)
+
+cdef("user_filehead", '{
+   sock_put("localhost:40477",sprintf("#SPECFE_DATAFILE=%s\n", DATAFILE))
+}', "specfe", 0x20)
+
+specfe_init_shm
+sock_put("localhost:40477",sprintf("#SPECFE_DATAFILE=%s\n", DATAFILE))
+#
+# EXAFS macros for specfe...
+#
+# G Jennings, 2004
+
+# G Jennings, 02/23/2012
+# Made the exafsscanopt variable global so that 'resume' can work
+
+# 
+# KC Chang, 02/16/2012
+# modified exafs_scan do RAXR scans in zaxis geometry
+# did not consider nu corrections yet
+# mu0 option is in psic geometry but took it is deleted
+
+def exafs_scan '{
+  if ($# > 1) {
+    eprint "Usage: exafs_scan [fixQ,eta0,th0]\n"
+    exit
+  }
+
+  for (i = 0; i < _regions; i++) {
+    if (_n[i] <= 0) {
+      eprint sprintf("Number of intervals in region %d <= 0", i)
+      exit
+    }
+
+    if (_s[i]+_edge <= 0 || _f[i]+_edge <= 0) {
+      eprint sprintf("Can only deal with positive energies in region %d", i)
+      exit
+    }
+  }
+
+  _bad_lim = 0
+  for (i = 0; i < _regions; i++) {
+    _chk_mlim (_edge+_s[i]);
+    _chk_mlim (_edge+_f[i]);
+  }
+  if (_bad_lim) exit;
+  
+  global _exafsscanopt
+  if("$1" == "eta0" && motor_num(eta) == -1){
+    _exafsscanopt = ""
+  } else {
+    if("$1" == "th0" && motor_num(th) == -1){
+	_exafsscanopt = ""
+    } else {
+	_exafsscanopt = "$1"
+    }
+  }
+
+  HEADING = sprintf("exafsscan %s%s\n#C exafs_edge_energy %g",$#>0?"$1 ":"",_def,_edge)
+  for (i = 0; i < _regions; i++) {
+    HEADING = sprintf("%s\n#C exafs_region %g %g %g %d %g %g %g",HEADING,_s[i]*1000,_f[i]*1000,_n[i],_t[i],_sl[i],_fl[i],_pw[i])
+  }
+
+  X_L = "Energy (keV)"
+  Y_L = cnt_name(DET)
+
+  FPRNT=sprintf("Energy  k  %s  ",motor_name(Mono))
+  PPRNT=sprintf("%9.9s %9.9s %9.9s ", "Energy", "k", motor_name(Mono))
+  _stype = 1|(1<<8)
+  _cols = 3
+
+  if (mono_type == 2) {
+    FPRNT=sprintf("%s%s  ",FPRNT,motor_name(mon_y))
+    PPRNT=sprintf("%s%9.9s ",PPRNT,motor_name(mon_y))
+    _stype = 1|(2<<8)
+    _cols=4
+  }
+  if (mono_type == 3 || mono_type == 4) {
+    FPRNT=sprintf("%s%s  %s  ",FPRNT,\
+      motor_name(montrav),motor_name(mond))
+    PPRNT=sprintf("%s%9.9s %9.9s ",PPRNT,\
+      motor_name(montrav),motor_name(mond))
+    _stype = 1|(3<<8)
+    _cols=5
+  }
+  VPRNT=PPRNT
+
+  exafs_time_calc
+
+  scan_head
+  def _scan_on \'
+  {
+    # store the fixed values of HKL or eta_offset
+    local h_ca k_ca l_ca d_ini etaoff_ini 
+    if(_exafsscanopt == "fixQ"){
+      h_ca = H
+      k_ca = K
+      l_ca = L
+    }
+    if(_exafsscanopt == "eta0"){
+      d_ini = LAMBDA/2/sin(rad(A[del]/2))
+      etaoff_ini = A[eta]-A[del]/2
+    }
+    if(_exafsscanopt == "th0"){
+      d_ini = LAMBDA/2/sin(rad(A[tth]/2))
+      etaoff_ini = A[th]-A[tth]/2
+    }
+    for (; NPTS < _n1; NPTS++) {
+      local E flgs
+      get_angles
+      E = exafs_energy(NPTS)
+      flgs = exafs_flags(NPTS)
+      calcM E; calcE
+
+      # check to see if the motor postions have to be moved
+      if(_exafsscanopt == "fixQ"){
+        H = h_ca
+        K = k_ca
+        L = l_ca
+        calcA
+      }
+      if(_exafsscanopt == "eta0"){
+        A[del] = deg(2*asin(LAMBDA/2/d_ini))
+        A[eta] = A[del]/2+etaoff_ini
+      }
+      if(_exafsscanopt == "th0"){
+        A[tth] = deg(2*asin(LAMBDA/2/d_ini))
+        A[th] = A[tth]/2+etaoff_ini
+      }
+
+      scan_move
+      calcE; E = hc_over_e / LAMBDA
+      FPRNT=sprintf("%g %g %.8g ",E,exafs_k(E-_edge),A[Mono])
+      PPRNT=sprintf("%9.4f %9.4f %9.4f ",E,exafs_k(E-_edge),A[Mono])
+      if (mono_type == 2) {
+            FPRNT=sprintf("%s%.8g ",FPRNT,A[mon_y])
+            PPRNT=sprintf("%s%9.4f ",PPRNT,A[mon_y])
+      }
+      if (mono_type == 3 || mono_type == 4) {
+            FPRNT=sprintf("%s%.8g %.8g ",FPRNT,A[montrav],A[mond])
+            PPRNT=sprintf("%s%9.4f %9.4f ",PPRNT,A[montrav],A[mond])
+      }
+      VPRNT=PPRNT
+      _ctime = exafs_ctime(NPTS)
+      _sleep = exafs_sleep(NPTS)
+      scan_loop
+      scan_data(NPTS, E)
+      scan_plot
+       }
+   }
+   scan_tail
+  \'
+  _scan_on
+}'
+
+def exafs_time_calc '{
+  local totaltime i j
+
+  global _ctime _regions _n _pw _n1
+
+  totaltime = 0
+  _n1 = 0
+
+  for (i=0; i < _regions; i++) {
+    if (_pw[i]) {
+      for (j=0; j < _n[i]; j++) {
+        totaltime += exafs_ctime(_n1+j);
+      }
+      totaltime += (_n[i]*_sl[i]);
+    } else {
+      totaltime += (_n[i]*(_t[i]+_sl[i]));
+    }
+    _n1 += _n[i];
+  }
+
+  _n1++
+  
+  _ctime = (totaltime / _n1);
+}'
+
+def exafs_edge_energy '{
+  if ($# != 1) {
+    eprint "usage: exafs_edge_energy energy\n"
+    exit
+  }
+
+  global _edge _regions _n1
+
+  _edge = $1; _regions = 0; _n1 = 0
+}'
+
+def exafs_region '{
+  if ($# < 4 || $# > 7) {
+    eprint "usage: exafs_region start end steps ctime [sltime] [kstep?] [ctpow]\n"
+    exit
+  }
+
+  global _s _f _n _t _d _n1 _regions _sl _fl _pw
+
+  _s[_regions]=$1/1000; _f[_regions]=$2/1000; _n[_regions]=$3; _t[_regions]=$4; _n1 += _n[_regions];
+  _d[_regions] = (_f[_regions] - _s[_regions]) / _n[_regions];
+  _sl[_regions] = $5;
+  _fl[_regions] = $6;
+  _pw[_regions] = $7;
+
+  _regions++;
+}'
+
+def exafs_energy(n) '{
+  local i nleft
+  global _regions _edge _s _f _d _n _fl
+  nleft = n;
+  for (i=0; i<_regions; i++) {
+    if (nleft <= _n[i]) {
+      if (_fl[i]) {
+        local ks kf dk
+        ks = exafs_k(_s[i])
+        kf = exafs_k(_f[i])
+        dk = (kf - ks)/_n[i];
+
+        return(_edge+exafs_e(ks+nleft*dk));
+      } else {
+        return(_edge+_s[i]+nleft*_d[i]);
+      }
+    } else {
+      nleft -= _n[i];
+    }
+  }
+
+  return _edge
+}'
+
+def exafs_ctime(n) '{
+  local i nleft
+  global _regions _edge _s _f _d _n _pw
+  nleft = n;
+  for (i=0; i<_regions; i++) {
+    if (nleft <= _n[i]) {
+      if (_pw[i]) {
+        local ks kf dk
+        k0 = exafs_k(_s[i])  
+        kf = exafs_k(_f[i])
+        dk = (kf - ks)/_n[i];
+        return(_t[i]*pow(fabs((k0+nleft*dk)/k0), _pw[i]));
+      } else {
+        return(_t[i]);
+      }
+    } else {
+      nleft -= _n[i];
+    }
+  }
+
+  return 0;
+}'
+
+def exafs_sleep(n) '{
+  local i nleft
+  global _regions _edge _sl _n
+  nleft = n;
+  for (i=0; i<_regions; i++) {
+    if (nleft <= _n[i]) {
+      return(_sl[i]);
+    } else {
+      nleft -= _n[i];
+    }
+  }
+
+  return (0);
+}'
+
+def exafs_flags(n) '{
+  local i nleft
+  global _regions _edge _fl _n
+  nleft = n;
+  for (i=0; i<_regions; i++) {
+    if (nleft <= _n[i]) {
+      return(_fl[i]);
+    } else {
+      nleft -= _n[i];
+    }
+  }
+}'
+
+def exafs_k(energy) '{
+  if (energy < 0) {
+    return -0.5123*sqrt(fabs(energy));
+  } else {
+    return 0.5123*sqrt(fabs(energy));
+  }
+}'
+
+def exafs_e(kval) '{
+  if (kval < 0) {
+    return -3.8102*kval*kval;
+  } else {
+    return 3.8102*kval*kval;
+  }
+}'
+
+def samplescan'
+  exafs_edge_energy 24.0 
+  exafs_region -100 -20 80 1
+  exafs_region -20 20 50 5
+  exafs_region 20 200 180 2 1 1.5
+  exafs_region 200 1000 250 1 1 2.0
+'
+
+#
+# shutter macros
+#
+
+#
+# filter control macros
+#
+
+#def modbus_filter_put(addr,val) '{
+#	addr=sprintf("%s:502",addr)
+#	if(sock_par(addr,"connect")){
+#		local ubyte array packet[512]
+#		local len
+#		packet[0:4]=0
+#		packet[5]=8
+#		packet[6]=255
+#		packet[7]=15
+#		packet[8]=0
+#		packet[9]=16
+#		packet[10]=0
+#		packet[11]=4
+#		packet[12]=1
+#		packet[13]=val&15
+#		if(sock_put(addr,packet[0:13]) == -1) {
+#			printf ("modbus_filter_put socket write failed\n")
+#			return -1
+#		}
+#		if(sock_get(addr,packet[0:5]) != 6) {
+#			printf ("modbus_filter_put socket read failed\n")
+#			return -1
+#		}
+#		len=packet[5]
+#		if(sock_get(addr,packet[6:(5+len)]) <= 0) {
+#			printf ("modbus_filter_put socket read failed\n")
+#			return -1
+#		}
+#		sock_par(addr,"close")
+#	} else {
+#		printf("modbus_filter_put couldn\'t open socket (%s)\n",addr)
+#		return -1;
+#	}
+#}'
+
+#def modbus_filter_put_one(addr,blade,val) '{
+#	addr=sprintf("%s:502",addr)
+#	if(sock_par(addr,"connect")){
+#		local ubyte array packet[512]
+#		local len
+#		packet[0:4]=0
+#		packet[5]=6
+#		packet[6]=255
+#		packet[7]=5
+#		packet[8]=0
+#		packet[9]=16+(blade&3)
+#		packet[10]=(val?255:0)
+#		packet[11]=0
+#		if(sock_put(addr,packet[0:11]) == -1) {
+#			printf ("modbus_filter_put_one socket write failed\n")
+#			return -1
+#		}
+#		if(sock_get(addr,packet[0:5]) != 6) {
+#			printf ("modbus_filter_put_one socket read failed\n")
+#			return -1
+#		}
+#		len=packet[5]
+#		if(sock_get(addr,packet[6:(5+len)]) <= 0) {
+#			printf ("modbus_filter_put_one socket read failed\n")
+#			return -1
+#		}
+#		sock_par(addr,"close")
+#	} else {
+#		printf("modbus_filter_put_one couldn\'t open socket (%s)\n",addr)
+#		return -1;
+#	}
+#
+#}'
+
+#def modbus_filter_get(addr) '{
+#	addr=sprintf("%s:502",addr)
+#	if(sock_par(addr,"connect")){
+#		local ubyte array packet[512]
+#		local len
+#		packet[0:4]=0
+#		packet[5]=6
+#		packet[6]=255
+#		packet[7]=1
+#		packet[8]=0
+#		packet[9]=16
+#		packet[10]=0
+#		packet[11]=4
+#		if(sock_put(addr,packet[0:11]) == -1) {
+#			printf ("modbus_filter_get socket write failed\n")
+#			return -1
+#		}
+#		if(sock_get(addr,packet[0:5]) != 6) {
+#			printf ("modbus_filter_get socket read failed\n")
+#			return -1
+#		}
+#		len=packet[5]
+#		if(sock_get(addr,packet[6:(5+len)]) <= 0) {
+#			printf ("modbus_filter_get read failed\n")
+#			return -1
+#		}
+#		sock_par(addr,"close")
+#		return packet[9]&15
+#	} else {
+#		printf("modbus_filter_get couldn\'t open socket (%s)\n",addr)
+#		return -1;
+#	}
+#}'
+#
+# marccd macros
+#
+
+#def marccd_openshutter ''
+#def marccd_closeshutter ''
+
+#def marccd_expose (seconds file) '{
+#   global fileindex
+#   fileindex += 1
+#   marccd_closeshutter
+#   unix("ccd_remote ccd_background")
+#   unix("ccd_remote ccd_start")
+#   marccd_openshutter
+#   count(seconds) 
+#   marccd_closeshutter
+#   unix("ccd_remote ccd_readout")
+#   unix("ccd_remote ccd_correct")
+#   unix(sprintf("ccd_remote \"ccd_savefile %s.%-0.5d.ccd\"", file, fileindex))
+#   printf("ccd data saved in file %s.%-0.5d.ccd\n", file, fileindex)
+#}'
+
+#
+# mar345 macros
+#
+
+# def mar345_openshutter ''
+
+# def mar345_closeshutter ''
+
+# def mar345expose(filename, exposure) '{
+#	mar345_openshutter
+#	uctn (exposure)
+#	mar345_closeshutter
+#	mar345readout(filename)
+#	ond
+#	printf ("#U %d  %d  %g  %g  %s  %s\n", time(), S[sec], S[mon], S[c4], filename, date());
+#	offd
+#	printf ("#U %d  %d  %g  %g  %s  %s\n", time(), S[sec], S[mon], S[c4], filename, date());
+#}'
+
+#def mar345readout(filename) '{
+#	fileindex++
+#	unix(sprintf("/home/bessrc/mar345send.tcl %s_%-0.5d", filename, fileindex));
+#}'
+
+#def mar345sequence '{
+#	local filename filebase startindex endindex exposure delay frame
+#	if ($# != 5) {
+#		printf("usage: mar345sequence filename startindex endindex exposure delay\n");
+# 	} else {
+#		filebase="$1"
+#		startindex=$2
+#		endindex=$3
+#		exposure=$4
+#		delay=$5
+#
+#		for (frame=startindex; frame <= endindex; frame++) {
+#			filename=sprintf("%s_%-0.5d", filebase, frame)
+#			printf ("Exposing %s\n", filename)
+#			mar345expose(sprintf("\"%s\"",filename), $4)
+#			sleep(delay)
+#		}
+#	}
+#}'
+
+#
+# gold detector macros
+#
+#
+# trsaxs detector macros
+#
+

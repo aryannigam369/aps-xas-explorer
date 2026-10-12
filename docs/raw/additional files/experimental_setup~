@@ -1,0 +1,55 @@
+#Zn scan
+moveE 10.6
+mt_ps;sleep(20)
+xascan("T1","Zn_K_15_e05",3)
+
+#Cu scan
+moveE 8.779
+mt_ps;sleep(20)
+xascan("T20_Cu","Cu_K_15_e05",3)
+
+
+#Fe scan
+#Put in Fe foil
+#Load Energy Window Fe-fla/Co-flb 
+moveE 6.912
+umv sav 64.16
+mt_ps;sleep(20)
+xascan("T1_Fe","Fe_K_15_e05",3)
+newfile setup 20
+
+#Co scan
+#Put in Co foil
+moveE 7.509
+umv sav 24.16
+mt_ps;sleep(20)
+xascan("J14_Co","Co_K_15_e05",3)
+newfile setup 30
+
+#Ni scan
+#Put in Ni foil
+#Load Energy Window Ni-fla/Ga-flb 
+moveE 8.133
+umv sav 24.16
+mt_ps;sleep(20)
+xascan("J14_Ni","Ni_K_15_e05",3)
+newfile setup 40
+
+moveE 8.133
+umv sav 44.16
+mt_ps;sleep(20)
+xascan("T20_Ni","Ni_K_15_e05",3)
+newfile setup 50
+
+#Ga scan
+#Put in W foil
+moveE 10.167
+umv sav 44.16
+mt_ps;sleep(20)
+xascan("T20_Ga","Ga_K_15_e05",3)
+newfile setup 60
+
+#Zn single scan
+moveE 10.6
+mt_ps;sleep(20)
+Zn_K_15_e05
