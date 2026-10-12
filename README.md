@@ -1,62 +1,82 @@
 # APS X-ray Absorption Explorer
 
-An interactive web interface for the **GUP38672_2014-2_12-BM** dataset acquired at the Advanced Photon Source in 2014.
+[Open the live explorer](https://aryannigam369.github.io/aps-xas-explorer/)
 
-The first deliverable turns the supplied beamline collection into a browsable spectrum explorer with traceable source files and explicit processing definitions.
+An interactive browser interface for the **GUP38672_2014-2_12-BM** collection acquired at APS in July 2014. Explore 33 individual spectra, three sample labels, six elements, and 15,939 main measurement points.
 
-## Explore the dataset
+## Features
 
-- Select Fe, Co, Ni, Cu, Zn, or Ga.
-- Use the sample × element coverage matrix to select J14, T1, or T20.
-- Overlay individual scans and switch between near-edge and full acquisition ranges.
-- Inspect recorded channels or clearly labelled fluorescence/I0 ratios.
-- Export the plotted measurements as CSV or download original SPEC files.
-- Review the acquisition inventory and provenance notes in **Dataset & methods**.
+- Sample–element coverage matrix and individual scan selection.
+- Full-range and near-edge spectra with absolute or relative energy.
+- Fluorescence/I0 ratios and recorded signal channels.
+- CSV exports, original SPEC downloads, and a methods inventory.
 
-Once GitHub Pages is enabled, the live website is linked under **Settings → Pages → Visit site**. Add that URL to this repository's About panel.
+The coverage matrix shows measurement availability, not physical sample positions. Signals are uncorrected; no normalization, smoothing, averaging, or structural fitting is applied.
 
-## Collection at a glance
+## Browse the implementation
 
-| Measure | Count |
-|---|---:|
-| Sample IDs | 3 |
-| Elements | 6 |
-| Main spectroscopy scans | 33 |
-| Main measurement points | 15,939 |
-| Original source files | 39 |
-| All acquisition blocks, including setup | 52 |
+| Path | Purpose |
+| --- | --- |
+| [DashboardContent.jsx](src/content/dashboard/DashboardContent.jsx) | Spectrum explorer, plots, controls, and methods view |
+| [explorer.css](src/content/dashboard/explorer.css) | Explorer styling |
+| [ingest.py](tools/ingest.py) | Parses SPEC blocks and prepares the reviewed dataset |
+| [validate.py](tools/validate.py) | Checks counts, source hashes, energy ordering, and calculated ratios |
+| [build_site.py](tools/build_site.py) | Builds and validates the website for Pages |
+| `src/components/` | Shared interface components |
+| `src/data.json` | Prepared dataset and metadata |
+| `public/raw/` | Original acquisition files |
+| `docs/` | Published website |
 
-The coverage matrix describes measurement availability, not spatial position or elemental concentration. Every main spectrum contains 483 points. All original files remain available for inspection.
+## Run locally
 
-## Methods and limitations
+Requirements: Node.js 22.12 or later, pnpm, and Python 3. Install dependencies using the supplied lockfile:
 
-The preparation script parses each SPEC scan block separately, validates its column count, converts energy from the supplied keV scale to eV, and retains the recorded measurements. The two fluorescence views calculate `flatot / i0` and `flbtot / i0`. No smoothing or scan averaging is applied.
+```sh
+pnpm install --frozen-lockfile
+pnpm dev
+```
 
-These are exploratory signal views. No energy-reference calibration, edge-step normalization, EXAFS extraction, Fourier transform, or structural fitting has been applied. Sample descriptions and spatial coordinates were not supplied.
+Open the local URL printed by Vite. The implementation uses JavaScript/JSX with React, CSS, HTML, and Python. React is a JavaScript library, not a separate programming language.
 
-Three J14 copper files contain T20_Cu file headers. The explorer preserves the folder-based assignment and flags the conflict for confirmation. Two J14 nickel scans share the filename label b; both remain separate. A slit-alignment block appended to a T1 copper file is excluded from the main spectra and retained in the supplementary inventory.
+To inspect the already-built website without installing JavaScript dependencies:
 
-## Files
+```sh
+python3 -m http.server 4173 --bind 127.0.0.1 --directory docs
+```
 
-- `docs/`: ready-to-publish static website, reviewed dataset, and source downloads.
-- `FULL-SOURCE.zip`: complete editable React/Python authoring project, parser, validation script, and build instructions. Extract locally to inspect or revise the implementation.
+Open http://127.0.0.1:4173/.
 
-The website requires no backend or API key. The Python preparation step runs before publication; the browser displays the prepared data. Publishing this version does not require running Python or installing Node.js.
+## Validate and build
 
-## Publish
+```sh
+python3 tools/validate.py
+python3 tools/build_site.py
+```
 
-In this repository, select **Settings → Pages → Deploy from a branch → main → /docs → Save**. Keep `docs/.nojekyll` in place. The live site serves the original compiled explorer without a custom build workflow.
+The build compiles the editable source, copies original download assets, validates data, and updates `docs/`. See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidance.
 
-To revise the interface, edit and rebuild the authoring project in `FULL-SOURCE.zip`, then replace the contents of `docs/` with the rebuilt `dist/` contents. Preserve the complete data sidecar and download assets.
+To regenerate the prepared dataset after changing original inputs:
 
-## Scientific references
+```sh
+python3 tools/ingest.py public/raw src/data.json
+python3 tools/validate.py
+python3 tools/build_site.py
+```
 
-- [Demeter](https://bruceravel.github.io/demeter/): XAFS analysis tools.
-- [Larch](https://xraypy.github.io/xraylarch/): X-ray spectroscopy processing and analysis.
-- [FEFF](https://feff.phys.washington.edu/): theoretical spectroscopy and modelling.
+The validation script intentionally checks this collection's expected counts; a different collection requires reviewing those expectations.
 
-These projects informed the scientific context; this explorer does not claim to reproduce their processing or fitting capabilities.
+## GitHub Pages
 
-## Data attribution
+Keep **Settings → Pages → Deploy from a branch → main → /docs**. Commit updated source and rebuilt `docs/` together. The included validation workflow checks data on pushes and pull requests; it does not deploy or rebuild the website.
 
-Dataset: GUP38672_2014-2_12-BM, supplied APS beamline collection, acquisition dates recorded as July 28, 2014. Sample labels follow the supplied directory structure. No new dataset license or authorship attribution has been invented. Add the dataset owner's approved citation and license when available.
+Compiled files are marked in `.gitattributes` so GitHub language statistics describe editable code rather than the bundled HTML. No language percentages are manually assigned.
+
+## Scientific scope
+
+The sample labels are J14, T1, and T20; sample compositions were not supplied. Each main scan contains 483 points. Energy is converted from keV to eV; fluorescence ratios use the recorded I0. Nominal edges come from acquisition headers and are not fitted edge positions.
+
+Known metadata issues include three J14 Cu files whose headers identify T20 and duplicate J14 Ni filename labels. Extra setup scans are preserved in the inventory but excluded from main spectra. Acquisition dates use `#D` headers because epoch fields are inconsistent.
+
+## Development and reuse
+
+This project combines dataset-specific Python/React code with a shared interface runtime and open-source dependencies. Dataset provenance and calculation checks are included for review. No new license for the supplied experimental data is asserted; original notices are retained.
