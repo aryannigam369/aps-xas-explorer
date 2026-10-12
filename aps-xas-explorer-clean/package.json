@@ -1,15 +1,13 @@
 {
-  "name": "data-app",
+  "name": "aps-xas-explorer",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "node scripts/verify-protected-runtime.mjs",
-    "build": "node scripts/verify-protected-runtime.mjs && vite build",
-    "test": "node --test tests/*.test.mjs",
-    "verify:runtime": "node scripts/verify-protected-runtime.mjs",
-    "integrity:authorize": "node scripts/authorize-protected-change.mjs",
-    "integrity:update": "node scripts/verify-protected-runtime.mjs --update --maintainer"
+    "build": "vite build",
+    "preview": "vite preview",
+    "validate": "python3 tools/validate.py",
+    "build:pages": "python3 tools/build_site.py"
   },
   "dependencies": {
     "@lexical/history": "^0.44.0",

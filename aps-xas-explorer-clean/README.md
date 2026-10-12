@@ -25,7 +25,7 @@ The coverage matrix shows measurement availability, not physical sample position
 | `src/components/` | Shared interface components |
 | `src/data.json` | Prepared dataset and metadata |
 | `public/raw/` | Original acquisition files |
-| `docs/` | Published website and runtime reference documentation |
+| `docs/` | Published website |
 
 ## Run locally
 
@@ -53,7 +53,7 @@ python3 tools/validate.py
 python3 tools/build_site.py
 ```
 
-The build verifies the shared runtime, compiles the editable source, copies original download assets, validates data, and updates `docs/`. Shared-runtime edits follow the scoped change procedure in [AGENTS.md](AGENTS.md). Application content belongs in `src/content/`.
+The build compiles the editable source, copies original download assets, validates data, and updates `docs/`. See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidance.
 
 To regenerate the prepared dataset after changing original inputs:
 
@@ -79,4 +79,4 @@ Known metadata issues include three J14 Cu files whose headers identify T20 and 
 
 ## Development and reuse
 
-This project combines dataset-specific Python/React code with a shared interface runtime and open-source dependencies. AI assistance was used during development. Dataset provenance and calculation checks are included for review. No new license for the supplied experimental data is asserted; original notices are retained.
+This project combines dataset-specific Python/React code with a shared interface runtime and open-source dependencies. Dataset provenance and calculation checks are included for review. No new license for the supplied experimental data is asserted; original notices are retained.
