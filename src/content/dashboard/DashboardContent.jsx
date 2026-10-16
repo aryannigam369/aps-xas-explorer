@@ -7,8 +7,26 @@ const CHANNELS={fluoA:'Fluorescence A / I0',fluoB:'Fluorescence B / I0',mu01:'Re
 const DEFINITIONS={fluoA:'flatot ÷ i0 · uncorrected ratio',fluoB:'flbtot ÷ i0 · uncorrected ratio',mu01:'Recorded mu01 · no additional processing',mu12:'Recorded mu12 · no additional processing',mu23:'Recorded mu23 · no additional processing',i0:'Recorded i0 · counts per acquisition point'};
 const number=(x,d=2)=>Number.isFinite(x)?x.toLocaleString('en-US',{maximumFractionDigits:d}):'—';
 const rawUrl=path=>'./raw/'+path.split('/').map(encodeURIComponent).join('/');
-function download(name,text){const url=URL.createObjectURL(new Blob([text],{type:'text/csv'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);}
+function download(name,text,type='text/plain'){const url=URL.createObjectURL(new Blob([text],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);}
 function csv(rows,keys){return [keys.join(','),...rows.map(r=>keys.map(k=>'"'+String(r[k]??'').replaceAll('"','""')+'"').join(','))].join('\n');}
+function asciiName(scan){return `${scan.sample}_${scan.element}_${scan.label||scan.scanNumber}`.replace(/[^A-Za-z0-9_]+/g,'_');}
+function demeterAscii(points,scans,channel,relative,element,sample,range){
+ const xkey=relative?'relativeEv':'energyEv', groups=scans.map(s=>({scan:s,rows:points.filter(r=>r.scanId===s.id)}));
+ const labels=groups.map(g=>asciiName(g.scan)), rows=[];
+ rows.push('# APS GUP38672_2014-2_12-BM · Demeter/Larch column export');
+ rows.push(`# Element: ${element} · Sample: ${sample==='all'?'all selected samples':sample}`);
+ rows.push(`# Signal: ${CHANNELS[channel]} · Energy: ${relative?'relative to nominal edge':'absolute'} eV · Window: ${range==='near'?'nominal edge -30 to +80 eV':'full acquired range'}`);
+ rows.push('# Values are the plotted measurements; no smoothing, averaging, or normalization was applied.');
+ rows.push(`# Source scans: ${groups.map(g=>g.scan.file).join(' | ')}`);
+ rows.push(`# ${[relative?'relative_energy_eV':'energy_eV',...labels].join('    ')}`);
+ const n=Math.max(0,...groups.map(g=>g.rows.length));
+ for(let i=0;i<n;i++){
+  const x=groups[0]?.rows[i]?.[xkey];
+  if(!Number.isFinite(x)) continue;
+  rows.push([x,...groups.map(g=>g.rows[i]?.[channel])].map(v=>Number.isFinite(v)?Number(v).toPrecision(12):'').join('    '));
+ }
+ return rows.join('\n')+'\n';
+}
 function SpectrumPlot({rows,scans,channel,relative,edge}){
  const root=useRef(null),[width,setWidth]=useState(850),[cursor,setCursor]=useState(null);
  useEffect(()=>{const o=new ResizeObserver(e=>setWidth(Math.max(300,e[0].contentRect.width)));if(root.current)o.observe(root.current);return()=>o.disconnect();},[]);
@@ -56,7 +74,7 @@ export function DashboardContent(){
  <DataComponent id="collection-summary" queryId="catalog" title="Collection at a glance" showHeading={false} kind="custom" displayRows={all} sourceRows={all}><div className="xas-summary" data-reviewed-rows><span><b>33</b> spectra</span><span><b>3</b> samples</span><span><b>6</b> elements</span><span><b>15,939</b> acquired points</span><span className="xas-summary-note">Original beamline signals · individual scans</span></div></DataComponent>
  <div className="xas-elements" role="group" aria-label="Select an element">{ELEMENTS.map(([sym,name,z])=><button key={sym} aria-pressed={sym===element} className={sym===element?'active':''} onClick={()=>choose('all',sym)}><span>{z}</span><b>{sym}</b><em>{name}</em><small>{all.filter(r=>r.element===sym).length} scans</small></button>)}</div>
  <div className="xas-explorer-grid"><aside className="xas-rail"><Coverage catalog={all} element={element} sample={sample} onChoose={choose}/><div className="xas-selection"><p className="xas-label">CURRENT SELECTION</p><h2>{elementInfo?.[1]||element} <span>{element}</span></h2><dl><dt>Nominal edge</dt><dd>{number(edge,1)} eV</dd><dt>Sample</dt><dd>{sample==='all'?'All available':sample}</dd><dt>Main scans</dt><dd>{visibleScans.length}</dd><dt>Displayed points</dt><dd>{number(points.length,0)}</dd></dl><p className="xas-small">The edge marker comes from the acquisition header; it is not a fitted edge position.</p><button className="xas-reset" onClick={reset}>↺ Reset explorer</button></div></aside>
- <div className="xas-mainplot"><DataComponent id="spectra-view" queryId="spectra" title={`${element} absorption spectra`} kind="custom" displayRows={points} sourceRows={points} scopeFilters={scope} variant="card" description={DEFINITIONS[channel]} headerControls={<button className="xas-download" onClick={()=>download(`${element}-${sample}-${channel}-${range}.csv`,csv(points,['scanId','sample','element','energyEv','relativeEv',channel]))}>Export plotted CSV ↙</button>}>
+ <div className="xas-mainplot"><DataComponent id="spectra-view" queryId="spectra" title={`${element} absorption spectra`} kind="custom" displayRows={points} sourceRows={points} scopeFilters={scope} variant="card" description={DEFINITIONS[channel]} headerControls={<div className="xas-export-actions"><button className="xas-download" onClick={()=>download(`${element}-${sample}-${channel}-${range}.csv`,csv(points,['scanId','sample','element','energyEv','relativeEv',channel]),'text/csv')}>Export plotted CSV ↙</button><button className="xas-download" onClick={()=>download(`${element}-${sample}-${channel}-${range}.dat`,demeterAscii(points,visibleScans,channel,relative,element,sample,range),'text/plain')}>Export Demeter/Larch .dat ↙</button></div>}>
  <div className="xas-controls"><label>Signal<select value={channel} onChange={e=>setChannel(e.target.value)}>{Object.entries(CHANNELS).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label><label>Sample<select value={sample} onChange={e=>{app.setFilter('sample',e.target.value);setSelected('');}}><option value="all">All available samples</option>{SAMPLES.map(s=><option key={s} value={s}>{s}</option>)}</select></label><label>Energy window<select value={range} onChange={e=>setRange(e.target.value)}><option value="near">Near edge · −30 to +80 eV</option><option value="full">Full acquired range</option></select></label></div>
  <div className="xas-plotmeta"><span>{DEFINITIONS[channel]}</span><label><input type="checkbox" checked={relative} onChange={e=>setRelative(e.target.checked)}/> Relative energy</label></div>
  <SpectrumPlot rows={points} scans={visibleScans} channel={channel} relative={relative} edge={edge}/>

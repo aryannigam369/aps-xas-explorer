@@ -10,6 +10,7 @@ An interactive browser interface for the **GUP38672_2014-2_12-BM** collection ac
 - Full-range and near-edge spectra with absolute or relative energy.
 - Fluorescence/I0 ratios and recorded signal channels.
 - CSV exports, original SPEC downloads, and a methods inventory.
+- Demeter/Larch-compatible whitespace-delimited `.dat` exports with comment headers and source-scan names.
 
 The coverage matrix shows measurement availability, not physical sample positions. Signals are uncorrected; no normalization, smoothing, averaging, or structural fitting is applied.
 
